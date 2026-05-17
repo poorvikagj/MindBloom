@@ -6,6 +6,7 @@ pipeline {
     }
 
     stages {
+
         stage('Install Dependencies') {
             steps {
                 bat 'npm ci'
@@ -14,8 +15,18 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('SonarQube-server') {
-                    bat 'sonar-scanner'
+                script {
+
+                    def scannerHome = tool 'SonarScanner'
+
+                    withSonarQubeEnv('SonarQube-server') {
+
+                        bat """
+                        ${scannerHome}\\bin\\sonar-scanner.bat ^
+                        -Dsonar.projectKey=%SONAR_PROJECT_KEY% ^
+                        -Dsonar.sources=.
+                        """
+                    }
                 }
             }
         }
