@@ -13,6 +13,24 @@ pipeline {
             }
         }
 
+        stage('Dependency Vulnerability Scan') {
+            steps {
+                script {
+
+                    bat 'if not exist reports mkdir reports'
+
+                    def auditStatus = bat(
+                        returnStatus: true,
+                        script: 'npm audit --audit-level=high --json > reports\\npm-audit-report.json'
+                    )
+
+                    if (auditStatus != 0) {
+                        error 'High/Critical vulnerabilities found.'
+                    }
+                }
+            }
+        }
+
         stage('SonarQube Analysis') {
             steps {
                 script {
@@ -38,5 +56,11 @@ pipeline {
         //         }
         //     }
         // }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: 'reports/npm-audit-report.json', allowEmptyArchive: true
+        }
     }
 }
