@@ -135,7 +135,7 @@ app.get('/mindbloom/signup', (req, res) => {
 app.post('/mindbloom/signup', wrapAsync(async (req, res) => {
     const { username, email, password } = req.body;
     const uuid = randomUUID();
-    const q = "INSERT INTO `USER` (USERID, UNAME, EMAIL, PSWD) VALUES (?, ?, ?, ?)";
+    const q = 'INSERT INTO "USER" (USERID, UNAME, EMAIL, PSWD) VALUES (?, ?, ?, ?)';
 
     connection.query(q, [uuid, username, email, password], (err) => {
         if (err) {
@@ -173,7 +173,7 @@ app.get('/mindbloom/login', (req, res) => {
 // Handle login (checks admin first, then user)
 app.post('/mindbloom/login', checkAdmin, (req, res) => {
     const { username, password } = req.body;
-    const q = "SELECT * FROM USER WHERE UNAME = ?";
+    const q = 'SELECT * FROM "USER" WHERE UNAME = ?';
 
     connection.query(q, [username], async (err, results) => {
         if (err || results.length === 0) {
@@ -223,7 +223,7 @@ app.get('/mindbloom/logout', (req, res) => {
 
 // Home page - Show all courses
 app.get("/mindbloom", (req, res) => {
-    let q = "SELECT * FROM COURSE";
+    let q = 'SELECT * FROM COURSE';
     connection.query(q, (err, result) => {
         if (err) throw err;
         res.render("listings/home.ejs", { result });
@@ -358,7 +358,7 @@ app.post('/mindbloom/course/:id/enroll', requireLogin, async (req, res) => {
 app.get('/mindbloom/profile', requireLogin, (req, res) => {
     const userId = req.session.user.id;
     
-    const userQuery = `SELECT USERID, UNAME, EMAIL, IMG FROM USER WHERE USERID = ?`;
+    const userQuery = 'SELECT USERID, UNAME, EMAIL, IMG FROM "USER" WHERE USERID = ?';
     
     // Fixed query to get enrolled courses with course details
     const enrolledCoursesQuery = `
@@ -539,7 +539,7 @@ app.put('/mindbloom/course/:id', requireAdmin, (req, res) => {
 // Delete course
 app.delete('/mindbloom/course/:id', requireAdmin, (req, res) => {
     const courseId = req.params.id;
-    const q = `DELETE FROM COURSE WHERE CID = ?`;
+    const q = 'DELETE FROM COURSE WHERE CID = ?';
 
     connection.query(q, [courseId], (err, result) => {
         if (err) {

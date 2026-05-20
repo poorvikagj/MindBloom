@@ -37,22 +37,21 @@ docker-compose up --build
 ```
 
 This starts:
-- **MySQL Database**: localhost:3306
 - **Backend Server**: http://localhost:5000/mindbloom
 - **Frontend**: http://localhost:3000
+
+The backend now expects a Supabase PostgreSQL connection in `backend/.env` through `DATABASE_URL`.
 
 ### Local Development
 
 #### Prerequisites
 - Node.js 20+
-- MySQL 8.0+
+- Supabase PostgreSQL database or another PostgreSQL instance
 
 #### Setup
 
-1. **Create database**:
-```bash
-mysql -u root -p < schema.sql
-```
+1. **Create the tables in PostgreSQL**:
+Use `schema.sql` as the base for your Supabase SQL editor or any PostgreSQL client.
 
 2. **Backend**:
 ```bash
@@ -78,16 +77,13 @@ NODE_ENV=development
 PORT=5000
 FRONTEND_URL=http://localhost:3000
 
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=mindbloom
-DB_PASSWORD=mindbloompass
-DB_NAME=project
-DB_ROOT_PASSWORD=rootpassword
-MYSQL_ROOT_PASSWORD=rootpassword
-MYSQL_DATABASE=project
-MYSQL_USER=mindbloom
-MYSQL_PASSWORD=mindbloompass
+DATABASE_URL=postgresql://postgres:your-supabase-password@db.<project-ref>.supabase.co:5432/postgres?sslmode=require
+SUPABASE_DB_HOST=db.<project-ref>.supabase.co
+SUPABASE_DB_PORT=5432
+SUPABASE_DB_USER=postgres
+SUPABASE_DB_PASSWORD=your-supabase-password
+SUPABASE_DB_NAME=postgres
+DB_SSL=true
 SESSION_SECRET=your-secret-key
 COOKIE_SECRET=your-cookie-secret
 COOKIE_SECURE=false
@@ -95,7 +91,7 @@ COOKIE_SECURE=false
 
 If you want a clean template, copy `backend/.env.example` to `backend/.env` and adjust the values for your environment.
 
-If you already have `DB_*` or `MYSQL_*` variables exported in your shell, start Docker from a clean terminal so those values do not override the backend env file.
+If you already have old MySQL variables exported in your shell, start Docker from a clean terminal so they do not override the Supabase env file.
 
 ## ✨ Features
 
@@ -117,9 +113,8 @@ If you already have `DB_*` or `MYSQL_*` variables exported in your shell, start 
 
 The `docker-compose.yml` orchestrates three services:
 
-1. **db**: MySQL 8.0 database
-2. **backend**: Express.js API server
-3. **frontend**: Node-based static file server
+1. **backend**: Express.js API server connected to Supabase PostgreSQL
+2. **frontend**: Node-based static file server
 
 All services are connected via the `mindbloom-network` bridge.
 

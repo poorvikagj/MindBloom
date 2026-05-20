@@ -1,42 +1,11 @@
 services:
-  db:
-    image: mysql:8.0
-    restart: unless-stopped
-    volumes:
-      - db_data:/var/lib/mysql
-      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./backend/.env:/etc/mindbloom/backend.env:ro
-    entrypoint:
-      - /bin/sh
-      - -c
-    command: |
-      set -a
-      . /etc/mindbloom/backend.env
-      set +a
-      export MYSQL_ROOT_PASSWORD="$$DB_ROOT_PASSWORD"
-      export MYSQL_DATABASE="$$DB_NAME"
-      export MYSQL_USER="$$DB_USER"
-      export MYSQL_PASSWORD="$$DB_PASSWORD"
-      exec /usr/local/bin/docker-entrypoint.sh mysqld --default-authentication-plugin=mysql_native_password
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$$MYSQL_ROOT_PASSWORD"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 20s
-    ports:
-      - "3306:3306"
-    networks:
-      - mindbloom-network
-
   backend:
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
+    env_file:
+      - ./backend/.env
     ports:
       - "5000:5000"
     command: sh -c "npm run seed && npm start"
@@ -66,6 +35,5 @@ networks:
     driver: bridge
 
 volumes:
-  db_data:
   backend_node_modules:
   frontend_node_modules:

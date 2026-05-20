@@ -1,4 +1,4 @@
-const pool = require('../config/database');
+const { pool } = require('../config/database');
 
 const teacherSeed = [
     ['teacher-data', 'Lena Carter', 'lena.carter@mindbloom.test', 'Passionate about turning complex data into meaningful insights using Python, pandas, and SQL. Loves teaching real-world data applications.', 'teacher123', 'Data Science'],
@@ -59,13 +59,25 @@ const enrollmentSeed = [
 ];
 
 async function runSeed() {
-    const conn = pool.promise();
+    for (const row of teacherSeed) {
+        await pool.query('INSERT INTO TEACHER (TID, TNAME, EMAIL, BIO, PASS, SPECIAL) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (TID) DO NOTHING', row);
+    }
 
-    await conn.query('INSERT IGNORE INTO TEACHER (TID, TNAME, EMAIL, BIO, PASS, SPECIAL) VALUES ?', [teacherSeed]);
-    await conn.query('INSERT IGNORE INTO COURSE (CID, TITLE, DESCRIP, VIDEO, TID, IMGLINK, VIDLINK) VALUES ?', [courseSeed]);
-    await conn.query('INSERT IGNORE INTO `USER` (USERID, UNAME, EMAIL, PSWD, IMG) VALUES ?', [userSeed]);
-    await conn.query('INSERT IGNORE INTO ADMINS (id, username, password) VALUES ?', [adminSeed]);
-    await conn.query('INSERT IGNORE INTO ENROLLMENT (EID, USERID, CID) VALUES ?', [enrollmentSeed]);
+    for (const row of courseSeed) {
+        await pool.query('INSERT INTO COURSE (CID, TITLE, DESCRIP, VIDEO, TID, IMGLINK, VIDLINK) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (CID) DO NOTHING', row);
+    }
+
+    for (const row of userSeed) {
+        await pool.query('INSERT INTO "USER" (USERID, UNAME, EMAIL, PSWD, IMG) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (USERID) DO NOTHING', row);
+    }
+
+    for (const row of adminSeed) {
+        await pool.query('INSERT INTO ADMINS (id, username, password) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING', row);
+    }
+
+    for (const row of enrollmentSeed) {
+        await pool.query('INSERT INTO ENROLLMENT (EID, USERID, CID) VALUES ($1, $2, $3) ON CONFLICT (EID) DO NOTHING', row);
+    }
 }
 
 runSeed()

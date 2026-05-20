@@ -44,6 +44,12 @@ pipeline {
                 bat 'docker compose config'
             }
         }
+
+        stage('Schema Check') {
+            steps {
+                bat 'cd backend && node scripts/seed.js'
+            }
+        }
     }
 
     post {

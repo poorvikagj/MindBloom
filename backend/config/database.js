@@ -1,25 +1,61 @@
-const mysql = require("mysql2");
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+const path = require('path');
+const { Pool } = require('pg');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const dbUser = process.env.DB_USER || process.env.MYSQL_USER || "root";
-const isRootUser = dbUser.toLowerCase() === "root";
+function normalizeSql(text) {
+    let index = 0;
+    return text.replace(/\?/g, () => `$${++index}`);
+}
 
-const connection = mysql.createConnection({
-    host: process.env.DB_HOST || process.env.MYSQL_HOST || "localhost",
-    user: dbUser,
-    password: isRootUser
-        ? (process.env.DB_ROOT_PASSWORD || process.env.MYSQL_ROOT_PASSWORD || process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || "")
-        : (process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || process.env.DB_ROOT_PASSWORD || process.env.MYSQL_ROOT_PASSWORD || ""),
-    database: process.env.DB_NAME || process.env.MYSQL_DATABASE || "project",
-    port: Number(process.env.DB_PORT || process.env.MYSQL_PORT || 3306)
-});
+function buildPoolConfig() {
+    const connectionString = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || process.env.SUPABASE_DB_URL;
 
-connection.connect((err) => {
-    if (err) {
-        console.error("Database connection error:", err);
-        process.exit(1);
+    if (connectionString) {
+        return {
+            connectionString,
+            ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false }
+        };
     }
-    console.log("✅ Connected to MySQL Database");
-});
 
-module.exports = connection;
+    const supabaseHost = process.env.SUPABASE_DB_HOST;
+    const supabasePort = Number(process.env.SUPABASE_DB_PORT || 5432);
+    const supabaseUser = process.env.SUPABASE_DB_USER || 'postgres';
+    const supabasePassword = process.env.SUPABASE_DB_PASSWORD || '';
+    const supabaseDatabase = process.env.SUPABASE_DB_NAME || 'postgres';
+
+    if (!supabaseHost) {
+        throw new Error('Missing PostgreSQL configuration. Set DATABASE_URL or SUPABASE_DB_HOST/SUPABASE_DB_PASSWORD in backend/.env for Supabase.');
+    }
+
+    return {
+        host: supabaseHost,
+        port: supabasePort,
+        user: supabaseUser,
+        password: supabasePassword,
+        database: supabaseDatabase,
+        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
+    };
+}
+
+const pool = new Pool(buildPoolConfig());
+
+function query(text, params, callback) {
+    let values = params;
+    let cb = callback;
+
+    if (typeof params === 'function') {
+        cb = params;
+        values = [];
+    }
+
+    const promise = pool.query(normalizeSql(text), values).then((result) => result.rows);
+
+    if (cb) {
+        promise.then((rows) => cb(null, rows)).catch((err) => cb(err));
+        return;
+    }
+
+    return promise;
+}
+
+module.exports = { pool, query };
