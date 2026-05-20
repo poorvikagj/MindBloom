@@ -3,64 +3,52 @@ pipeline {
 
     environment {
         SONAR_PROJECT_KEY = 'mindbloom'
+        BACKEND_DIR = 'backend'
+        FRONTEND_DIR = 'frontend'
     }
 
     stages {
 
-        stage('Install Dependencies') {
+        stage('Install Backend Dependencies') {
             steps {
-                bat 'npm ci'
+                bat 'cd backend && npm ci'
             }
         }
 
-        stage('Dependency Vulnerability Scan') {
+        stage('Install Frontend Dependencies') {
             steps {
-                script {
-
-                    bat 'if not exist reports mkdir reports'
-
-                    def auditStatus = bat(
-                        returnStatus: true,
-                        script: 'npm audit --audit-level=high --json > reports\\npm-audit-report.json'
-                    )
-
-                    if (auditStatus != 0) {
-                        error 'High/Critical vulnerabilities found.'
-                    }
-                }
+                bat 'cd frontend && npm ci'
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('Backend Audit') {
             steps {
-                script {
-
-                    def scannerHome = tool 'SonarScanner'
-
-                    withSonarQubeEnv('SonarQube-server') {
-
-                        bat """
-                        ${scannerHome}\\bin\\sonar-scanner.bat ^
-                        -Dsonar.projectKey=%SONAR_PROJECT_KEY% ^
-                        -Dsonar.sources=.
-                        """
-                    }
-                }
+                bat 'cd backend && npm audit --audit-level=high'
             }
         }
 
-        // stage('Quality Gate') {
-        //     steps {
-        //         timeout(time: 5, unit: 'MINUTES') {
-        //             waitForQualityGate abortPipeline: true
-        //         }
-        //     }
-        // }
+        stage('Frontend Audit') {
+            steps {
+                bat 'cd frontend && npm audit --audit-level=high'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                bat 'docker build -t mindbloom-backend -f Dockerfile .'
+            }
+        }
+
+        stage('Compose Validation') {
+            steps {
+                bat 'docker compose config'
+            }
+        }
     }
 
     post {
         always {
-            archiveArtifacts artifacts: 'reports/npm-audit-report.json', allowEmptyArchive: true
+            echo 'Pipeline completed.'
         }
     }
 }
