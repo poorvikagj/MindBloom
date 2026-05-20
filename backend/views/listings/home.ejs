@@ -1,0 +1,17 @@
+<%layout("layouts/boilerplate")-%>
+    <h3 class="heading">Courses Available</h3>
+    <div class="row">
+        <%for(let course of result) {%>
+            <div class="col-lg-4 col-md-6 mb-4">
+                <a href="/mindbloom/course/<%=course.CID%>" class="listing-link">
+                    <div class="card h-100">
+                        <img src="<%=course.IMGLINK%>" class="card-img-top" alt="Courses image">
+                        <div class="card-body">
+                            <h5 class="card-title"><%=course.TITLE%></h5>
+                            <p class="card-text"><%=course.DESCRIP%></p>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        <%}%>
+    </div>

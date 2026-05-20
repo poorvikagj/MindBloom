@@ -1,0 +1,37 @@
+<%layout("layouts/boilerplate.ejs")-%>
+    <div class="text-center mb-3">
+        <h3>Course details</h3>
+    </div>
+
+    <div class="show-card card">
+        <img src="<%=result[0].IMGLINK%>" class="card-img-top show-img" alt="course_image">
+        <div class="card-body">
+            <h4 class="card-title"><%=result[0].TITLE%></h4>
+            <p class="card-text"><%=result[0].DESCRIP%></p>
+            <p class="text-muted-small">Number of Videos: <%=result[0].VIDEO%> &nbsp; • &nbsp; <%=Math.ceil(Math.random()*25)+7%> hours of lectures</p>
+            <p class="text-muted-small">Course handled by: <%=result[0].TNAME%></p>
+
+            <div class="d-flex gap-2 flex-wrap mt-3">
+                <form action="/mindbloom/teachers/<%=result[0].TID%>" method="GET">
+                    <button type="submit" class="btn btn-outline-primary">View teacher details</button>
+                </form>
+                <%if(userId){%>
+                    <% if(isEnrolled){ %>
+                        <button type="button" class="btn btn-success" disabled>Enrolled</button>
+                    <% } else { %>
+                    <form action="/mindbloom/course/<%= result[0].CID %>/enroll" method="POST">
+                        <button type="submit" class="btn btn-success">Enroll</button>
+                    </form>
+                    <% } %>
+                <%}%>
+                <%if(ad){%>
+                    <form action="/mindbloom/course/<%= result[0].CID %>/edit" method="GET">
+                        <button type="submit" class="btn btn-secondary">Edit</button>
+                    </form>
+                    <form action="/mindbloom/course/<%= result[0].CID %>?_method=Delete" method="POST">
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                <%}%>
+            </div>
+        </div>
+    </div>
