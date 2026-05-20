@@ -1,5 +1,6 @@
 services:
   backend:
+    image: poorvikagj/mindbloom:latest
     build:
       context: .
       dockerfile: Dockerfile
