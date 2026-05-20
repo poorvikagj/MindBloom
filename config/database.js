@@ -1,5 +1,6 @@
-const path = require('path');
 const { Pool } = require('pg');
+const path = require('path');
+
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 function normalizeSql(text) {
@@ -24,7 +25,7 @@ function buildPoolConfig() {
     const supabaseDatabase = process.env.SUPABASE_DB_NAME || 'postgres';
 
     if (!supabaseHost) {
-        throw new Error('Missing PostgreSQL configuration. Set DATABASE_URL or SUPABASE_DB_HOST/SUPABASE_DB_PASSWORD in backend/.env for Supabase.');
+        throw new Error('Missing PostgreSQL configuration. Set DATABASE_URL or SUPABASE_DB_HOST/SUPABASE_DB_PASSWORD in .env for Supabase.');
     }
 
     return {
@@ -48,7 +49,20 @@ function query(text, params, callback) {
         values = [];
     }
 
-    const promise = pool.query(normalizeSql(text), values).then((result) => result.rows);
+    const normalizeRowKeys = (row) => {
+        const normalized = { ...row };
+
+        for (const [key, value] of Object.entries(row)) {
+            const upperKey = key.toUpperCase();
+            if (!(upperKey in normalized)) {
+                normalized[upperKey] = value;
+            }
+        }
+
+        return normalized;
+    };
+
+    const promise = pool.query(normalizeSql(text), values).then((result) => result.rows.map(normalizeRowKeys));
 
     if (cb) {
         promise.then((rows) => cb(null, rows)).catch((err) => cb(err));

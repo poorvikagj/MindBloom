@@ -1,6 +1,10 @@
 <%layout("layouts/boilerplate")-%>
 <div class="row mt-3">
     <div class="col-8 offset-2">
+        <div class="mb-4">
+            <h3 class="heading mb-1">Create a Course</h3>
+            <p class="text-muted mb-0">Add the title, description, teacher, and cover image so the course appears on the home page.</p>
+        </div>
         <form action="/mindbloom/courses" method="post" novalidate class="needs-validation">
             <div class="mb-3">
                 <label for="title" class="form-label">Title</label>
@@ -24,14 +28,14 @@
             </div>
             <div class="mb-3">
                 <label for="image_url" class="form-label">Cover Image URL</label>
-                <input type="text" class="form-control" name="imgLink" placeholder="Enter image url" id="image_url">
+                <input type="text" class="form-control" name="imgLink" placeholder="Enter image url" id="image_url" required>
             </div>
             <div class="mb-3">
                 <label for="video_url" class="form-label">Video URL</label>
-                <input type="text" class="form-control" name="vidLink" placeholder="Enter video url" id="video_url">
+                <input type="text" class="form-control" name="vidLink" placeholder="Enter video url" id="video_url" required>
             </div>
             <div class="mb-3">
-                <button class="btn btn-dark edit-btn mt-3">Add</button>
+                <button class="btn btn-dark edit-btn mt-3">Create Course</button>
             </div>
         </form>
     </div>

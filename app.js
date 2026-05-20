@@ -1,7 +1,12 @@
-const express = require("express");
+﻿const express = require("express");
 const app = express();
 const port = process.env.PORT || 5000;
 const path = require("path");
+const fs = require('fs/promises');
+const { createWriteStream } = require('fs');
+const http = require('http');
+const https = require('https');
+const { pipeline } = require('stream/promises');
 const ejsMate = require('ejs-mate');
 const { randomUUID } = require('crypto');
 const methodOverride = require("method-override");
@@ -10,16 +15,6 @@ const flash = require('connect-flash');
 const wrapAsync = require('./utils/wrapAsync.js');
 const cookieParser = require('cookie-parser');
 const connection = require('./config/database.js');
-const cors = require('cors');
-
-// ============ CORS CONFIGURATION ============
-const corsOptions = {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true,
-    optionsSuccessStatus: 200
-};
-
-app.use(cors(corsOptions));
 
 // ============ APP CONFIGURATION ============
 app.set("view engine", "ejs");
@@ -70,7 +65,7 @@ function checkAdmin(req, res, next) {
     console.log('checkAdmin called, session exists:', !!req.session);
 
     const { username, password } = req.body;
-    const qa = "SELECT * FROM ADMINS WHERE username = ?";
+    const qa = "SELECT * FROM admins WHERE username = ?";
 
     connection.query(qa, [username], (err, results) => {
         if (err) {
@@ -120,6 +115,153 @@ function requireAdmin(req, res, next) {
     next();
 }
 
+function buildTeacherEmail(tname) {
+    const localPart = String(tname || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '.')
+        .replace(/^\.+|\.+$/g, '');
+
+    return `${localPart || 'teacher'}@mindbloom.local`;
+}
+
+function getImageExtension(contentType) {
+    const normalizedType = String(contentType || '').toLowerCase();
+
+    if (normalizedType.includes('jpeg') || normalizedType.includes('jpg')) return '.jpg';
+    if (normalizedType.includes('png')) return '.png';
+    if (normalizedType.includes('webp')) return '.webp';
+    if (normalizedType.includes('gif')) return '.gif';
+    if (normalizedType.includes('svg')) return '.svg';
+
+    return '.jpg';
+}
+
+async function persistCourseImage(imageUrl, courseId) {
+    const trimmedUrl = String(imageUrl || '').trim();
+
+    if (!trimmedUrl) {
+        return '';
+    }
+
+    try {
+        const parsedUrl = new URL(trimmedUrl);
+
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+            return trimmedUrl;
+        }
+    } catch (error) {
+        return trimmedUrl;
+    }
+
+    try {
+        const downloadResult = await new Promise((resolve, reject) => {
+            const parsedUrl = new URL(trimmedUrl);
+            const client = parsedUrl.protocol === 'http:' ? http : https;
+
+            const request = client.get(parsedUrl, (response) => {
+                if (response.statusCode !== 200) {
+                    response.resume();
+                    reject(new Error(`Image request failed with status ${response.statusCode}`));
+                    return;
+                }
+
+                const contentType = response.headers['content-type'] || '';
+
+                if (!contentType.toLowerCase().startsWith('image/')) {
+                    response.resume();
+                    reject(new Error(`Unsupported content type: ${contentType}`));
+                    return;
+                }
+
+                resolve({ response, contentType });
+            });
+
+            request.on('error', reject);
+        });
+
+        const uploadsDir = path.join(__dirname, 'public', 'uploads', 'courses');
+        const fileName = `${courseId}${getImageExtension(downloadResult.contentType)}`;
+        const filePath = path.join(uploadsDir, fileName);
+
+        await fs.mkdir(uploadsDir, { recursive: true });
+        await pipeline(downloadResult.response, createWriteStream(filePath));
+
+        return `/uploads/courses/${fileName}`;
+    } catch (error) {
+        console.log('Course image fallback:', trimmedUrl, error.message);
+        return trimmedUrl;
+    }
+}
+
+function createCourseWithImage(coursePayload, callback) {
+    const { courseId, title, description, video, teacherId, imgLink, vidLink } = coursePayload;
+    const insertQuery = `INSERT INTO courses (CID, TITLE, DESCRIP, VIDEO, TID, IMGLINK, VIDLINK) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+
+    persistCourseImage(imgLink, courseId)
+        .then((storedImagePath) => {
+            callback(null, [courseId, title, description, video, teacherId, storedImagePath, vidLink]);
+        })
+        .catch((imageErr) => {
+            callback(imageErr);
+        });
+}
+
+function findOrCreateTeacherId(tname, callback) {
+    const teacherName = String(tname || '').trim();
+
+    if (!teacherName) {
+        return callback(new Error('Teacher username is required.'));
+    }
+
+    const lookupQuery = `SELECT TID FROM teachers WHERE TNAME = ?`;
+
+    connection.query(lookupQuery, [teacherName], (lookupErr, teacherResult) => {
+        if (lookupErr) {
+            return callback(lookupErr);
+        }
+
+        if (teacherResult.length > 0) {
+            return callback(null, teacherResult[0].TID, false);
+        }
+
+        const teacherId = randomUUID();
+        const insertTeacherQuery = `INSERT INTO teachers (TID, TNAME, EMAIL, BIO, PASS, SPECIAL) VALUES (?, ?, ?, ?, ?, ?)`;
+        const teacherEmail = buildTeacherEmail(teacherName);
+
+        connection.query(
+            insertTeacherQuery,
+            [teacherId, teacherName, teacherEmail, 'The instructor teaches this course', '', 'General'],
+            (insertErr) => {
+                if (insertErr) {
+                    return callback(insertErr);
+                }
+
+                return callback(null, teacherId, true);
+            }
+        );
+    });
+}
+
+async function ensureTextColumns() {
+    const migrations = [
+        'ALTER TABLE teachers ALTER COLUMN BIO TYPE TEXT USING BIO::TEXT',
+        'ALTER TABLE courses ALTER COLUMN DESCRIP TYPE TEXT USING DESCRIP::TEXT'
+    ];
+
+    for (const statement of migrations) {
+        try {
+            await connection.pool.query(statement);
+        } catch (error) {
+            if (error.code === '42P01' || error.code === '42703') {
+                continue;
+            }
+
+            throw error;
+        }
+    }
+}
+
 // ============ AUTHENTICATION ROUTES ============
 
 // Registration form
@@ -135,7 +277,7 @@ app.get('/mindbloom/signup', (req, res) => {
 app.post('/mindbloom/signup', wrapAsync(async (req, res) => {
     const { username, email, password } = req.body;
     const uuid = randomUUID();
-    const q = 'INSERT INTO "USER" (USERID, UNAME, EMAIL, PSWD) VALUES (?, ?, ?, ?)';
+    const q = 'INSERT INTO users (USERID, UNAME, EMAIL, PSWD) VALUES (?, ?, ?, ?)';
 
     connection.query(q, [uuid, username, email, password], (err) => {
         if (err) {
@@ -152,7 +294,7 @@ app.post('/mindbloom/signup', wrapAsync(async (req, res) => {
         req.session.user_id = uuid;
         req.session.isLoggedIn = true;
         res.cookie('user_id', uuid, { httpOnly: true });
-        req.flash('success', 'Registration successful — you are now logged in.');
+        req.flash('success', 'Registration successful - you are now logged in.');
         // Save the session and redirect to home so the next request shows logged-in UI
         req.session.save((saveErr) => {
             if (saveErr) console.log('Session save error after signup:', saveErr);
@@ -173,7 +315,7 @@ app.get('/mindbloom/login', (req, res) => {
 // Handle login (checks admin first, then user)
 app.post('/mindbloom/login', checkAdmin, (req, res) => {
     const { username, password } = req.body;
-    const q = 'SELECT * FROM "USER" WHERE UNAME = ?';
+    const q = 'SELECT * FROM users WHERE UNAME = ?';
 
     connection.query(q, [username], async (err, results) => {
         if (err || results.length === 0) {
@@ -223,7 +365,7 @@ app.get('/mindbloom/logout', (req, res) => {
 
 // Home page - Show all courses
 app.get("/mindbloom", (req, res) => {
-    let q = 'SELECT * FROM COURSE';
+    let q = 'SELECT * FROM courses';
     connection.query(q, (err, result) => {
         if (err) throw err;
         res.render("listings/home.ejs", { result });
@@ -241,11 +383,11 @@ app.get("/mindbloom/search", (req, res) => {
     const like = `%${searchTerm}%`;
     const q = `
         SELECT *
-        FROM COURSE
-        JOIN TEACHER ON COURSE.TID = TEACHER.TID
-        WHERE COURSE.TITLE LIKE ?
-           OR COURSE.DESCRIP LIKE ?
-           OR TEACHER.TNAME LIKE ?
+        FROM courses
+        JOIN teachers ON courses.TID = teachers.TID
+        WHERE courses.TITLE LIKE ?
+           OR courses.DESCRIP LIKE ?
+           OR teachers.TNAME LIKE ?
     `;
 
     connection.query(q, [like, like, like], (err, result) => {
@@ -257,7 +399,7 @@ app.get("/mindbloom/search", (req, res) => {
 // Show courses by teacher
 app.get("/mindbloom/teachers/:tid", (req, res) => {
     let { tid } = req.params;
-    let q = `SELECT * FROM COURSE JOIN TEACHER ON COURSE.TID = TEACHER.TID WHERE TEACHER.TID = ?`;
+    let q = `SELECT * FROM courses JOIN teachers ON courses.TID = teachers.TID WHERE teachers.TID = ?`;
 
     connection.query(q, [tid], (err, result) => {
         if (err) throw err;
@@ -270,7 +412,7 @@ app.get("/mindbloom/course/:id", (req, res) => {
     let { id } = req.params;
     let ad = req.session.admin;
     let userId = req.session.user ? req.session.user.id : null;
-    let q = `SELECT * FROM COURSE JOIN TEACHER ON COURSE.TID = TEACHER.TID WHERE CID = ?`;
+    let q = `SELECT * FROM courses JOIN teachers ON courses.TID = teachers.TID WHERE CID = ?`;
 
     connection.query(q, [id], (err, result) => {
         if (err) throw err;
@@ -284,7 +426,7 @@ app.get("/mindbloom/course/:id", (req, res) => {
             });
         }
 
-        const enrollmentQuery = `SELECT 1 FROM ENROLLMENT WHERE USERID = ? AND CID = ? LIMIT 1`;
+        const enrollmentQuery = `SELECT 1 FROM enrollments WHERE USERID = ? AND CID = ? LIMIT 1`;
 
         connection.query(enrollmentQuery, [userId, id], (enrollmentErr, enrollmentResult) => {
             if (enrollmentErr) throw enrollmentErr;
@@ -299,7 +441,7 @@ app.get("/mindbloom/course/:id", (req, res) => {
     });
 });
 
-// ============ ENROLLMENT ROUTES ============
+// ============ enrollments ROUTES ============
 
 // Enroll in course
 app.post('/mindbloom/course/:id/enroll', requireLogin, async (req, res) => {
@@ -310,7 +452,7 @@ app.post('/mindbloom/course/:id/enroll', requireLogin, async (req, res) => {
 
     try {
         // Check if user is already enrolled
-        const checkQuery = "SELECT * FROM ENROLLMENT WHERE USERID = ? AND CID = ?";
+        const checkQuery = "SELECT * FROM enrollments WHERE USERID = ? AND CID = ?";
 
         const checkEnrollment = new Promise((resolve, reject) => {
             connection.query(checkQuery, [userId, courseId], (err, results) => {
@@ -330,7 +472,7 @@ app.post('/mindbloom/course/:id/enroll', requireLogin, async (req, res) => {
         }
 
         // Insert new enrollment
-        const insertQuery = "INSERT INTO ENROLLMENT (EID, USERID, CID) VALUES (?, ?, ?)";
+        const insertQuery = "INSERT INTO enrollments (EID, USERID, CID) VALUES (?, ?, ?)";
 
         const insertEnrollment = new Promise((resolve, reject) => {
             connection.query(insertQuery, [eid, userId, courseId], (err, results) => {
@@ -358,7 +500,7 @@ app.post('/mindbloom/course/:id/enroll', requireLogin, async (req, res) => {
 app.get('/mindbloom/profile', requireLogin, (req, res) => {
     const userId = req.session.user.id;
     
-    const userQuery = 'SELECT USERID, UNAME, EMAIL, IMG FROM "USER" WHERE USERID = ?';
+    const userQuery = 'SELECT USERID, UNAME, EMAIL, IMG FROM users WHERE USERID = ?';
     
     // Fixed query to get enrolled courses with course details
     const enrolledCoursesQuery = `
@@ -370,10 +512,10 @@ app.get('/mindbloom/profile', requireLogin, (req, res) => {
             c.IMGLINK,
             c.VIDLINK,
             t.TNAME,
-            t.EMAIL as TEACHER_EMAIL
-        FROM ENROLLMENT e
-        JOIN COURSE c ON e.CID = c.CID
-        JOIN TEACHER t ON c.TID = t.TID
+            t.EMAIL as teachers_EMAIL
+        FROM enrollments e
+        JOIN courses c ON e.CID = c.CID
+        JOIN teachers t ON c.TID = t.TID
         WHERE e.USERID = ?
     `;
     
@@ -412,11 +554,11 @@ app.get('/mindbloom/profile', requireLogin, (req, res) => {
         });
     });
 });
-// ============ COURSE CRUD ROUTES (ADMIN ONLY) ============
+// ============ courses CRUD ROUTES (ADMIN ONLY) ============
 
 // Add new course form
 app.get('/mindbloom/courses/new', requireAdmin, (req, res) => {
-    const teachersQuery = `SELECT * FROM TEACHER`;
+    const teachersQuery = `SELECT * FROM teachers`;
 
     connection.query(teachersQuery, (err, teachers) => {
         if (err) {
@@ -433,46 +575,46 @@ app.get('/mindbloom/courses/new', requireAdmin, (req, res) => {
 app.post('/mindbloom/courses', requireAdmin, (req, res) => {
     const { title, description, video, tname, imgLink, vidLink } = req.body;
 
-    // First, validate that the teacher username exists
-    const teacherValidationQuery = `SELECT TID FROM TEACHER WHERE TNAME = ?`;
-
-    connection.query(teacherValidationQuery, [tname], (err, teacherResult) => {
-        if (err) {
-            console.log(err);
-            req.flash('error', 'Database error while validating teacher.');
+    findOrCreateTeacherId(tname, (teacherErr, teacherId, teacherCreated) => {
+        if (teacherErr) {
+            console.log(teacherErr);
+            req.flash('error', 'Error preparing teacher account.');
             return res.redirect('/mindbloom/courses/new');
         }
 
-        // Check if teacher was found
-        if (teacherResult.length === 0) {
-            req.flash('error', 'Teacher username not found. Please select a valid teacher.');
-            return res.redirect('/mindbloom/courses/new');
-        }
-
-        // Teacher exists, get the TID and proceed with course creation
-        const teacherId = teacherResult[0].TID;
         const courseId = randomUUID();
 
-        const insertQuery = `INSERT INTO COURSE (CID, TITLE, DESCRIP, VIDEO, TID, IMGLINK, VIDLINK) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+        createCourseWithImage(
+            { courseId, title, description, video, teacherId, imgLink, vidLink },
+            (imageErr, values) => {
+                if (imageErr) {
+                    console.log(imageErr);
+                    req.flash('error', 'Error preparing course image.');
+                    return res.redirect('/mindbloom/courses/new');
+                }
 
-        connection.query(insertQuery, [courseId, title, description, video, teacherId, imgLink, vidLink], (err, result) => {
-            if (err) {
-                console.log(err);
-                req.flash('error', 'Error creating course.');
-                return res.redirect('/mindbloom/courses/new');
+                const insertQuery = `INSERT INTO courses (CID, TITLE, DESCRIP, VIDEO, TID, IMGLINK, VIDLINK) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+
+                connection.query(insertQuery, values, (err, result) => {
+                    if (err) {
+                        console.log(err);
+                        req.flash('error', 'Error creating course.');
+                        return res.redirect('/mindbloom/courses/new');
+                    }
+
+                    req.flash('success', teacherCreated ? 'Teacher account created and course added successfully!' : 'Course created successfully!');
+                    res.redirect(`/mindbloom/course/${courseId}`);
+                });
             }
-
-            req.flash('success', 'Course created successfully!');
-            res.redirect(`/mindbloom/course/${courseId}`);
-        });
+        );
     });
 });
 
 // Get edit form for course
 app.get('/mindbloom/course/:id/edit', requireAdmin, (req, res) => {
     const courseId = req.params.id;
-    const courseQuery = `SELECT * FROM COURSE WHERE CID = ?`;
-    const teachersQuery = `SELECT * FROM TEACHER,COURSE WHERE TEACHER.TID=COURSE.TID`;
+    const courseQuery = `SELECT * FROM courses WHERE CID = ?`;
+    const teachersQuery = `SELECT * FROM teachers,courses WHERE teachers.TID=courses.TID`;
 
     connection.query(courseQuery, [courseId], (err, courseResult) => {
         if (err) {
@@ -505,41 +647,41 @@ app.get('/mindbloom/course/:id/edit', requireAdmin, (req, res) => {
 app.put('/mindbloom/course/:id', requireAdmin, (req, res) => {
     const courseId = req.params.id;
     const { title, description, video, tname, imglink, vidLink } = req.body;
-    const teacherValidationQuery = `SELECT TID FROM TEACHER WHERE TNAME = ?`;
 
-    connection.query(teacherValidationQuery, [tname], (err, teacherResult) => {
-        if (err) {
-            console.log(err);
-            req.flash('error', 'Database error while validating teacher.');
+    findOrCreateTeacherId(tname, (teacherErr, teacherId, teacherCreated) => {
+        if (teacherErr) {
+            console.log(teacherErr);
+            req.flash('error', 'Error preparing teacher account.');
             return res.redirect('/mindbloom/courses/new');
         }
 
-        if (teacherResult.length === 0) {
-            req.flash('error', 'Teacher username not found. Please select a valid teacher.');
-            return res.redirect('/mindbloom/courses/new');
-        }
+        persistCourseImage(imglink, courseId)
+            .then((storedImagePath) => {
+                const updateQuery = `UPDATE courses SET TITLE = ?, DESCRIP = ?, VIDEO = ?, TID = ?, IMGLINK = ?, VIDLINK = ? WHERE CID = ?`;
 
-        const teacherId = teacherResult[0].TID;
+                connection.query(updateQuery, [title, description, video, teacherId, storedImagePath, vidLink, courseId], (err, result) => {
+                    if (err) {
+                        console.log(err);
+                        req.flash('error', 'Error updating course.');
+                        return res.redirect('/mindbloom/courses/new');
+                    }
 
-        const updateQuery = `UPDATE COURSE SET TITLE = ?, DESCRIP = ?, VIDEO = ?, TID = ?, IMGLINK = ?, VIDLINK = ? WHERE CID = ?`;
-
-        connection.query(updateQuery, [title, description, video, teacherId, imglink, vidLink, courseId], (err, result) => {
-            if (err) {
-                console.log(err);
-                req.flash('error', 'Error updating course.');
+                    req.flash('success', teacherCreated ? 'Teacher account created and course updated successfully!' : 'Course updated successfully!');
+                    res.redirect(`/mindbloom/course/${courseId}`);
+                });
+            })
+            .catch((imageErr) => {
+                console.log(imageErr);
+                req.flash('error', 'Error preparing course image.');
                 return res.redirect('/mindbloom/courses/new');
-            }
-
-            req.flash('success', 'Course updated successfully!');
-            res.redirect(`/mindbloom/course/${courseId}`);
-        });
+            });
     });
 });
 
 // Delete course
 app.delete('/mindbloom/course/:id', requireAdmin, (req, res) => {
     const courseId = req.params.id;
-    const q = 'DELETE FROM COURSE WHERE CID = ?';
+    const q = 'DELETE FROM courses WHERE CID = ?';
 
     connection.query(q, [courseId], (err, result) => {
         if (err) {
@@ -554,9 +696,18 @@ app.delete('/mindbloom/course/:id', requireAdmin, (req, res) => {
 });
 
 // ============ SERVER STARTUP ============
-app.listen(port, () => {
-    console.log(`✅ Backend server running on port ${port}`);
-    console.log(`📍 Frontend expected on: http://localhost:3000`);
-});
+if (require.main === module && !process.env.VERCEL) {
+    ensureTextColumns()
+        .then(() => {
+            app.listen(port, () => {
+                console.log(`Backend server running on port ${port}`);
+            });
+        })
+        .catch((error) => {
+            console.error('Failed to prepare database schema:', error);
+            process.exit(1);
+        });
+}
 
 module.exports = app;
+

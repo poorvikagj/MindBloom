@@ -22,7 +22,7 @@
                     <% for(let i=0;i<result.length;i++){ let course = result[i]; %>
                         <div class="col-12 col-md-6 mb-3">
                             <div class="d-flex align-items-start gap-3">
-                                <img src="<%=course.IMGLINK%>" alt="" style="width:72px;height:54px;object-fit:cover;border-radius:.4rem;"/>
+                                <img src="<%= course.IMGLINK && course.IMGLINK.trim() ? course.IMGLINK : '/images/course-placeholder.svg' %>" alt="<%= course.TITLE %> cover image" style="width:72px;height:54px;object-fit:cover;border-radius:.4rem;" onerror="this.onerror=null;this.src='/images/course-placeholder.svg';"/>
                                 <div>
                                     <div class="fw-semibold"><%=course.TITLE %></div>
                                     <a href="/mindbloom/course/<%=course.CID%>" class="btn btn-sm btn-outline-primary mt-1">View Course</a>

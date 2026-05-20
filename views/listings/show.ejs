@@ -1,10 +1,11 @@
 <%layout("layouts/boilerplate.ejs")-%>
+<% const coverImage = result[0].IMGLINK && result[0].IMGLINK.trim() ? result[0].IMGLINK : '/images/course-placeholder.svg'; %>
     <div class="text-center mb-3">
         <h3>Course details</h3>
     </div>
 
     <div class="show-card card">
-        <img src="<%=result[0].IMGLINK%>" class="card-img-top show-img" alt="course_image">
+        <img src="<%= coverImage %>" class="card-img-top show-img" alt="<%= result[0].TITLE %> cover image" onerror="this.onerror=null;this.src='/images/course-placeholder.svg';">
         <div class="card-body">
             <h4 class="card-title"><%=result[0].TITLE%></h4>
             <p class="card-text"><%=result[0].DESCRIP%></p>

@@ -1,0 +1,15 @@
+<svg width="1200" height="675" viewBox="0 0 1200 675" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="675" rx="36" fill="#F4F1EA"/>
+  <circle cx="1000" cy="140" r="120" fill="#F8D9C6"/>
+  <circle cx="220" cy="560" r="150" fill="#E6D8C8"/>
+  <path d="M250 198C250 167.624 274.624 143 305 143H895C925.376 143 950 167.624 950 198V477C950 507.376 925.376 532 895 532H305C274.624 532 250 507.376 250 477V198Z" fill="#FFFDF8" stroke="#D9CFC2" stroke-width="8"/>
+  <rect x="312" y="206" width="576" height="260" rx="24" fill="#E9F2FF"/>
+  <path d="M392 392L497 303L579 368L662 269L808 392H392Z" fill="#BFD7FF"/>
+  <circle cx="456" cy="269" r="32" fill="#FFD58A"/>
+  <rect x="340" y="212" width="168" height="26" rx="13" fill="#DAD2C8"/>
+  <rect x="340" y="254" width="268" height="18" rx="9" fill="#E5DED5"/>
+  <rect x="340" y="284" width="220" height="18" rx="9" fill="#E5DED5"/>
+  <rect x="340" y="314" width="178" height="18" rx="9" fill="#E5DED5"/>
+  <text x="600" y="595" text-anchor="middle" fill="#6A5B4D" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="700">MindBloom Courses</text>
+  <text x="600" y="640" text-anchor="middle" fill="#8A7D72" font-family="Arial, Helvetica, sans-serif" font-size="24">Cover image unavailable</text>
+</svg>

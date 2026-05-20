@@ -6,21 +6,17 @@ A full-stack web application for managing online courses with user registration,
 
 ```
 MindBloom/
-├── backend/              # Express.js server (port 5000)
-│   ├── app.js           # Main application file
-│   ├── config/          # Database configuration
-│   ├── public/          # Static assets (CSS, JS)
-│   ├── views/           # EJS templates
-│   ├── scripts/         # Database seeding
-│   ├── utils/           # Helper functions
-│   ├── .env             # Local backend environment variables
-│   ├── .env.example     # Template for backend environment variables
-│   └── package.json     # Backend dependencies
-│
-├── frontend/            # Static frontend assets (port 3000)
-│   ├── index.html       # Landing page
-│   ├── package.json     # Frontend dependencies
-│
+├── app.js               # Main Express application
+├── config/              # Database configuration
+├── public/              # Static assets (CSS, JS)
+├── views/               # EJS templates
+├── scripts/             # Database seeding
+├── utils/               # Helper functions
+├── .env                 # Local backend environment variables
+├── .env.example         # Template for backend environment variables
+├── api/                 # Vercel serverless entrypoint
+├── package.json         # Root deployment dependencies
+├── vercel.json          # Vercel routing config
 ├── Dockerfile           # Backend container config
 ├── docker-compose.yml   # Multi-container orchestration
 ├── Jenkinsfile          # CI/CD pipeline
@@ -36,11 +32,9 @@ MindBloom/
 docker-compose up --build
 ```
 
-This starts:
-- **Backend Server**: http://localhost:5000/mindbloom
-- **Frontend**: http://localhost:3000
+This starts the backend-rendered site directly from the repository root.
 
-The backend now expects a Supabase PostgreSQL connection in `backend/.env` through `DATABASE_URL`.
+For Vercel, the root `api/index.js` file exposes the same Express app as a serverless function.
 
 ### Local Development
 
@@ -61,22 +55,13 @@ npm run seed      # Seed sample data
 npm start         # Runs on port 5000
 ```
 
-3. **Frontend**:
-```bash
-cd frontend
-npm install
-npm start         # Runs on port 3000
-```
-
 ## 🔧 Configuration
 
-Create a `backend/.env` file with:
+Create a `.env` file at the repository root with:
 
 ```env
 NODE_ENV=development
 PORT=5000
-FRONTEND_URL=http://localhost:3000
-
 DATABASE_URL=postgresql://postgres:your-supabase-password@db.<project-ref>.supabase.co:5432/postgres?sslmode=require
 SUPABASE_DB_HOST=db.<project-ref>.supabase.co
 SUPABASE_DB_PORT=5432
@@ -89,9 +74,18 @@ COOKIE_SECRET=your-cookie-secret
 COOKIE_SECURE=false
 ```
 
-If you want a clean template, copy `backend/.env.example` to `backend/.env` and adjust the values for your environment.
+If you want a clean template, copy `.env.example` to `.env` and adjust the values for your environment.
 
 If you already have old MySQL variables exported in your shell, start Docker from a clean terminal so they do not override the Supabase env file.
+
+## 🚀 Vercel Deploy
+
+This repository is now structured for backend-only deployment on Vercel:
+
+1. The Express app lives in `app.js`.
+2. Vercel enters through `api/index.js`.
+3. `vercel.json` rewrites every route to the serverless app.
+4. Static files still come from `public/`, and EJS templates still render from `views/`.
 
 ## ✨ Features
 
@@ -103,20 +97,19 @@ If you already have old MySQL variables exported in your shell, start Docker fro
 
 ## 📚 Database Schema
 
-- **USER**: Student accounts
-- **TEACHER**: Instructor information
-- **COURSE**: Course details
-- **ENROLLMENT**: Student course enrollments
-- **ADMINS**: Administrator accounts
+- **users**: Student accounts
+- **teachers**: Instructor information
+- **courses**: Course details
+- **enrollments**: Student course enrollments
+- **admins**: Administrator accounts
 
 ## 🐳 Docker Services
 
-The `docker-compose.yml` orchestrates three services:
+The `docker-compose.yml` now orchestrates a single backend service:
 
 1. **backend**: Express.js API server connected to Supabase PostgreSQL
-2. **frontend**: Node-based static file server
 
-All services are connected via the `mindbloom-network` bridge.
+It uses the `mindbloom-network` bridge only for the backend container.
 
 ## 🔐 Security Notes
 

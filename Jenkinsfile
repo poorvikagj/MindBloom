@@ -3,33 +3,19 @@ pipeline {
 
     environment {
         SONAR_PROJECT_KEY = 'mindbloom'
-        BACKEND_DIR = 'backend'
-        FRONTEND_DIR = 'frontend'
     }
 
     stages {
 
         stage('Install Backend Dependencies') {
             steps {
-                bat 'cd backend && npm ci'
-            }
-        }
-
-        stage('Install Frontend Dependencies') {
-            steps {
-                bat 'cd frontend && npm ci'
+                bat 'npm ci'
             }
         }
 
         stage('Backend Audit') {
             steps {
-                bat 'cd backend && npm audit --audit-level=high'
-            }
-        }
-
-        stage('Frontend Audit') {
-            steps {
-                bat 'cd frontend && npm audit --audit-level=high'
+                bat 'npm audit --audit-level=high'
             }
         }
 
@@ -47,7 +33,7 @@ pipeline {
 
         stage('Schema Check') {
             steps {
-                bat 'cd backend && node scripts/seed.js'
+                bat 'node scripts/seed.js'
             }
         }
     }
