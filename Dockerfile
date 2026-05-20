@@ -2,8 +2,11 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+ENV NODE_ENV=production
+ENV PORT=5000
+
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev && npm cache clean --force
 
 COPY app.js ./
 COPY config ./config
@@ -12,6 +15,8 @@ COPY scripts ./scripts
 COPY utils ./utils
 COPY views ./views
 
+RUN mkdir -p /app/public/uploads/courses
+
 EXPOSE 5000
 
-CMD ["npm", "start"]
+CMD ["node", "app.js"]
